@@ -1,96 +1,93 @@
 import os
-import io
 import base64
 import requests
 from flask import Flask, render_template, request, jsonify
+from flask_cors import CORS
 from PIL import Image
+import io
 import logging
-from datetime import datetime
 import time
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
 
 app = Flask(__name__)
+CORS(app)
 
 # 配置日志
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-# Hugging Face配置 - 使用支持Inference API的RealESRGAN模型
-HF_API_URL = "https://api-inference.huggingface.co/models/ai-forever/Real-ESRGAN"
+# Hugging Face配置
+HF_API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-x4-upscaler"
 HF_API_TOKEN = os.getenv("HF_API_TOKEN", "")
 
-def upscale_image_with_hf(image_data, max_retries=3):
+# 支持的图片格式
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'}
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+
+def allowed_file(filename):
+    """检查文件扩展名是否允许"""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def validate_image(file_data):
+    """验证图片文件是否有效"""
+    assert file_data, "图片数据为空"
+    
+    # 尝试打开图片验证格式
+    img = Image.open(io.BytesIO(file_data))
+    assert img.format.lower() in ['png', 'jpeg', 'jpg', 'gif', 'bmp', 'webp'], f"不支持的图片格式: {img.format}"
+    
+    # 检查图片尺寸
+    width, height = img.size
+    assert width > 0 and height > 0, "无效的图片尺寸"
+    assert width <= 4096 and height <= 4096, "图片尺寸过大，最大支持4096x4096"
+    
+    logger.info(f"图片验证通过: {img.format}, 尺寸: {width}x{height}")
+    return True
+
+def upscale_image(image_data, max_retries=3):
     """使用Hugging Face API进行超分辨率处理"""
-    import time
-
+    assert HF_API_TOKEN, "HF_API_TOKEN环境变量未设置"
+    assert image_data, "图片数据为空"
+    
+    headers = {
+        "Authorization": f"Bearer {HF_API_TOKEN}",
+        "Content-Type": "application/octet-stream",
+        "User-Agent": "AI-Upscaler/1.0"
+    }
+    
     for attempt in range(max_retries):
-        try:
-            from requests.adapters import HTTPAdapter
-            from urllib3.util.retry import Retry
-
-            # 创建会话并配置重试策略
-            session = requests.Session()
-            retry_strategy = Retry(
-                total=3,
-                backoff_factor=1,
-                status_forcelist=[429, 500, 502, 503, 504],
-            )
-            adapter = HTTPAdapter(max_retries=retry_strategy)
-            session.mount("http://", adapter)
-            session.mount("https://", adapter)
-
-            headers = {
-                "Authorization": f"Bearer {HF_API_TOKEN}",
-                "Content-Type": "application/octet-stream",
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-            }
-
-            logger.info(f"尝试第 {attempt + 1} 次调用 Hugging Face API...")
-
-            # 发送请求到Hugging Face
-            response = session.post(
-                HF_API_URL,
-                headers=headers,
-                data=image_data,
-                timeout=(30, 180),  # (连接超时, 读取超时)
-                stream=False
-            )
-
-            if response.status_code == 200:
-                logger.info("Hugging Face API调用成功")
-                return response.content
-            elif response.status_code == 503:
-                logger.warning(f"模型正在加载中，状态码: {response.status_code}")
-                if attempt < max_retries - 1:
-                    wait_time = (attempt + 1) * 10  # 递增等待时间
-                    logger.info(f"等待 {wait_time} 秒后重试...")
-                    time.sleep(wait_time)
-                    continue
-            else:
-                logger.error(f"HF API Error: {response.status_code} - {response.text}")
-                if attempt < max_retries - 1:
-                    time.sleep(5)  # 短暂等待后重试
-                    continue
-
-        except requests.exceptions.ConnectionError as e:
-            logger.error(f"连接错误 (尝试 {attempt + 1}/{max_retries}): {str(e)}")
-            if attempt < max_retries - 1:
-                wait_time = (attempt + 1) * 5
-                logger.info(f"等待 {wait_time} 秒后重试...")
-                time.sleep(wait_time)
-                continue
-        except requests.exceptions.Timeout as e:
-            logger.error(f"请求超时 (尝试 {attempt + 1}/{max_retries}): {str(e)}")
-            if attempt < max_retries - 1:
-                time.sleep(10)
-                continue
-        except Exception as e:
-            logger.error(f"未知错误 (尝试 {attempt + 1}/{max_retries}): {str(e)}")
-            if attempt < max_retries - 1:
-                time.sleep(5)
-                continue
-
-    logger.error(f"所有 {max_retries} 次尝试都失败了")
-    return None
+        start_time = time.time()
+        logger.info(f"开始第 {attempt + 1} 次API调用...")
+        
+        response = requests.post(
+            HF_API_URL,
+            headers=headers,
+            data=image_data,
+            timeout=120
+        )
+        
+        elapsed_time = time.time() - start_time
+        logger.info(f"API调用完成，耗时: {elapsed_time:.2f}秒，状态码: {response.status_code}")
+        
+        if response.status_code == 200:
+            assert response.content, "API返回空内容"
+            logger.info(f"超分处理成功，返回数据大小: {len(response.content)} bytes")
+            return response.content
+        elif response.status_code == 503 and attempt < max_retries - 1:
+            wait_time = 2 ** attempt
+            logger.warning(f"模型加载中，等待 {wait_time} 秒后重试...")
+            time.sleep(wait_time)
+            continue
+        else:
+            error_msg = f"API调用失败: {response.status_code} - {response.text}"
+            logger.error(error_msg)
+            assert False, error_msg
 
 @app.route('/')
 def index():
@@ -99,92 +96,78 @@ def index():
 @app.route('/upscale', methods=['POST'])
 def upscale():
     start_time = time.time()
-    try:
-        # 检查是否有文件上传
-        if 'image' not in request.files:
-            return jsonify({'error': 'No image file provided'}), 400
-        
-        file = request.files['image']
-        if file.filename == '':
-            return jsonify({'error': 'No image selected'}), 400
-        
-        # 验证文件大小 (限制为5MB)
-        file.seek(0, os.SEEK_END)
-        file_length = file.tell()
-        file.seek(0)
-        
-        if file_length > 5 * 1024 * 1024:
-            return jsonify({'error': 'Image size too large. Maximum 5MB allowed.'}), 400
-        
-        # 读取图片
-        image_bytes = file.read()
-        
-        # 调用Hugging Face API进行超分
-        upscaled_image = upscale_image_with_hf(image_bytes)
-        
-        if upscaled_image:
-            # 将结果转换为base64编码以便前端显示
-            encoded_image = base64.b64encode(upscaled_image).decode('utf-8')
-            
-            processing_time = time.time() - start_time
-            logger.info(f"Image upscaled successfully in {processing_time:.2f} seconds")
-            
-            return jsonify({
-                'success': True,
-                'upscaled_image': f'image/jpeg;base64,{encoded_image}',
-                'processing_time': round(processing_time, 2)
-            })
-        else:
-            return jsonify({'error': 'Failed to upscale image. Please try again.'}), 500
-            
-    except Exception as e:
-        logger.error(f"Error in upscale route: {str(e)}")
-        return jsonify({'error': 'Internal server error'}), 500
+    
+    # 验证请求
+    assert 'image' in request.files, "请选择图片文件"
+    
+    file = request.files['image']
+    assert file.filename, "未选择图片"
+    assert allowed_file(file.filename), f"不支持的文件类型，仅支持: {', '.join(ALLOWED_EXTENSIONS)}"
+    
+    # 验证文件大小
+    file.seek(0, os.SEEK_END)
+    file_size = file.tell()
+    file.seek(0)
+    
+    assert file_size <= MAX_FILE_SIZE, f"图片文件过大，请选择小于{MAX_FILE_SIZE // (1024*1024)}MB的图片"
+    assert file_size > 0, "图片文件为空"
+    
+    logger.info(f"接收到文件: {file.filename}, 大小: {file_size} bytes")
+    
+    # 读取并验证图片数据
+    image_data = file.read()
+    validate_image(image_data)
+    
+    # 调用AI超分
+    result = upscale_image(image_data)
+    
+    # 转换为base64返回给前端
+    encoded_image = base64.b64encode(result).decode('utf-8')
+    
+    total_time = time.time() - start_time
+    logger.info(f"处理完成，总耗时: {total_time:.2f}秒")
+    
+    return jsonify({
+        'success': True,
+        'image': f'data:image/png;base64,{encoded_image}',
+        'processing_time': round(total_time, 2),
+        'original_size': file_size,
+        'result_size': len(result)
+    })
+
+@app.errorhandler(AssertionError)
+def handle_assertion_error(e):
+    """处理断言错误"""
+    error_msg = str(e) if str(e) else "请求参数错误"
+    logger.warning(f"断言错误: {error_msg}")
+    return jsonify({'error': error_msg}), 400
+
+@app.errorhandler(Exception)
+def handle_general_error(e):
+    """处理一般错误"""
+    logger.error(f"服务器错误: {str(e)}", exc_info=True)
+    return jsonify({'error': '服务器内部错误，请稍后重试'}), 500
 
 @app.route('/health')
-def health_check():
+def health():
+    """健康检查接口"""
     return jsonify({
         'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat(),
-        'version': '1.0.0'
+        'timestamp': time.time(),
+        'hf_token_configured': bool(HF_API_TOKEN)
     })
 
 @app.route('/info')
 def info():
+    """应用信息接口"""
     return jsonify({
-        'app_name': 'AI Super Resolution',
-        'description': 'Image upscaling using Hugging Face AI models',
-        'model': 'microsoft/swin2SR-classical-sr-x2-64'
+        'name': 'AI图像超分辨率应用',
+        'version': '1.0.0',
+        'model': 'stabilityai/stable-diffusion-x4-upscaler',
+        'max_file_size_mb': MAX_FILE_SIZE // (1024 * 1024),
+        'supported_formats': list(ALLOWED_EXTENSIONS)
     })
 
-@app.route('/test-api')
-def test_api():
-    """测试Hugging Face API连接"""
-    try:
-        import requests
-        headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
-
-        # 简单的GET请求测试API连接
-        response = requests.get(
-            "https://api-inference.huggingface.co/models/microsoft/swin2SR-classical-sr-x2-64",
-            headers=headers,
-            timeout=10
-        )
-
-        return jsonify({
-            'api_status': 'connected',
-            'status_code': response.status_code,
-            'token_valid': bool(HF_API_TOKEN),
-            'response_headers': dict(response.headers)
-        })
-    except Exception as e:
-        return jsonify({
-            'api_status': 'error',
-            'error': str(e),
-            'token_valid': bool(HF_API_TOKEN)
-        }), 500
-
 if __name__ == '__main__':
-    # Render部署配置
     port = int(os.environ.get('PORT', 5001))
     app.run(host='0.0.0.0', port=port, debug=False)

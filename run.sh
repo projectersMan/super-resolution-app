@@ -37,28 +37,12 @@ echo
 echo "检查环境变量配置..."
 if [ -z "$HF_API_TOKEN" ]; then
     echo "⚠️  警告: HF_API_TOKEN 环境变量未设置"
-    echo "请设置您的Hugging Face API Token:"
-    echo "export HF_API_TOKEN=your_huggingface_token_here"
-    echo
-    echo "或者创建.env文件:"
-    echo "cp .env.example .env"
-    echo "# 然后编辑.env文件填入您的Token"
-    echo
-    read -p "是否要临时设置Token? (y/n): " set_token
-    if [[ $set_token == "y" || $set_token == "Y" ]]; then
-        read -p "请输入您的Hugging Face Token: " temp_token
-        export HF_API_TOKEN=$temp_token
-        echo "✅ 临时Token已设置"
-    else
-        echo "⚠️  继续运行但API功能可能不可用"
-    fi
+    echo "请参考 SETUP_TOKEN.md 文档配置您的Token"
+    echo "应用将启动但AI超分功能需要配置Token后才能使用"
 else
     echo "✅ HF_API_TOKEN 已配置"
 fi
 echo
-
-# 进入应用目录
-cd super_resolution_app
 
 # 启动应用
 echo "启动超分辨率应用..."

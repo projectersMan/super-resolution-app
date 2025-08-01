@@ -3,90 +3,335 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI超分辨率图像处理</title>
-    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+    <title>AI图像超分辨率</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5rem;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 40px;
+            font-size: 1.1rem;
+        }
+
+        .upload-area {
+            border: 2px dashed #ddd;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .upload-area:hover {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            display: block;
+        }
+
+        .upload-text {
+            font-size: 1.2rem;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .upload-hint {
+            color: #999;
+            font-size: 0.9rem;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 30px;
+            color: #666;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .image-preview {
+            display: none;
+            margin-top: 20px;
+        }
+
+        .image-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .image-box {
+            text-align: center;
+        }
+
+        .image-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .image-box img {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .message {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .message.error {
+            background: #fee;
+            color: #c33;
+            border: 1px solid #fcc;
+        }
+
+        .message.success {
+            background: #efe;
+            color: #363;
+            border: 1px solid #cfc;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            
+            .image-container {
+                grid-template-columns: 1fr;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="container">
-        <div class="app-header">
-            <h1>🚀 AI超分辨率图像处理</h1>
-            <p class="subtitle">使用先进的AI技术，将您的图像提升至4倍分辨率</p>
+        <h1>🚀 AI图像超分辨率</h1>
+        <p class="subtitle">使用AI技术将图像提升至更高分辨率</p>
+
+        <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+            <span class="upload-icon">📤</span>
+            <div class="upload-text">点击选择图片</div>
+            <div class="upload-hint">支持 JPG、PNG 格式，最大 5MB</div>
         </div>
 
-        <div class="upload-section">
-            <div class="file-input-wrapper">
-                <input type="file" id="imageInput" accept="image/*">
-                <label for="imageInput" class="upload-btn">
-                    <span class="btn-text">📤 选择图片</span>
-                    <span class="file-info" id="fileInfo">支持 JPG, PNG 格式 (最大5MB)</span>
-                </label>
-            </div>
-
-            <button id="upscaleBtn" class="upscale-btn" disabled>
-                <span class="btn-text">✨ 开始超分</span>
-                <span class="btn-subtext">AI图像增强</span>
-            </button>
-        </div>
+        <input type="file" id="fileInput" accept="image/*">
+        <button id="upscaleBtn" class="btn" disabled>开始AI超分</button>
 
         <div id="loading" class="loading">
-            <div class="loading-content">
-                <div class="spinner"></div>
-                <div class="loading-text">AI正在处理您的图像</div>
-                <div class="loading-subtext">这可能需要几秒钟时间，请耐心等待...</div>
-                <div class="progress-bar">
-                    <div class="progress-fill"></div>
-                </div>
-            </div>
+            <div class="spinner"></div>
+            <div>AI正在处理您的图像，请稍候...</div>
         </div>
 
         <div id="message" class="message"></div>
 
-        <div class="preview-section">
+        <div id="imagePreview" class="image-preview">
             <div class="image-container">
                 <div class="image-box">
-                    <div class="box-header">
-                        <h3>📷 原始图像</h3>
-                        <span class="image-size" id="originalSize"></span>
-                    </div>
-                    <div class="image-wrapper">
-                        <img id="originalImage" style="display: none;">
-                        <div id="originalPlaceholder" class="placeholder">
-                            <div class="placeholder-content">
-                                <span class="emoji">🖼️</span>
-                                <p>原始图像将显示在这里</p>
-                            </div>
-                        </div>
-                    </div>
+                    <div class="image-title">原始图像</div>
+                    <img id="originalImage" alt="原始图像">
                 </div>
-
                 <div class="image-box">
-                    <div class="box-header">
-                        <h3>✨ 超分结果</h3>
-                        <span class="image-size" id="resultSize"></span>
-                    </div>
-                    <div class="image-wrapper">
-                        <img id="resultImage" style="display: none;">
-                        <div id="resultPlaceholder" class="placeholder">
-                            <div class="placeholder-content">
-                                <span class="emoji">🚀</span>
-                                <p>超分辨率结果将显示在这里</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="app-footer">
-            <div class="footer-content">
-                <p>基于 Hugging Face 的 AI 超分辨率技术</p>
-                <div class="tech-info">
-                    <span class="model-name">stabilityai/stable-diffusion-x4-upscaler</span>
+                    <div class="image-title">AI超分结果</div>
+                    <img id="resultImage" alt="超分结果">
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const upscaleBtn = document.getElementById('upscaleBtn');
+        const loading = document.getElementById('loading');
+        const message = document.getElementById('message');
+        const imagePreview = document.getElementById('imagePreview');
+        const originalImage = document.getElementById('originalImage');
+        const resultImage = document.getElementById('resultImage');
+        const uploadArea = document.querySelector('.upload-area');
+
+        let selectedFile = null;
+
+        // 拖拽上传
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileSelect(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+
+        function handleFileSelect(file) {
+            if (!file.type.startsWith('image/')) {
+                showMessage('请选择图片文件', 'error');
+                return;
+            }
+
+            if (file.size > 5 * 1024 * 1024) {
+                showMessage('图片文件过大，请选择小于5MB的图片', 'error');
+                return;
+            }
+
+            selectedFile = file;
+            upscaleBtn.disabled = false;
+
+            // 预览原始图片
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                originalImage.src = e.target.result;
+                imagePreview.style.display = 'block';
+                resultImage.style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        upscaleBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            loading.style.display = 'block';
+            upscaleBtn.disabled = true;
+            hideMessage();
+
+            const formData = new FormData();
+            formData.append('image', selectedFile);
+
+            try {
+                const response = await fetch('/upscale', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    resultImage.src = result.image;
+                    resultImage.style.display = 'block';
+                    showMessage('AI超分处理完成！', 'success');
+                } else {
+                    showMessage(result.error || 'AI处理失败', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误，请重试', 'error');
+            } finally {
+                loading.style.display = 'none';
+                upscaleBtn.disabled = false;
+            }
+        });
+
+        function showMessage(text, type) {
+            message.textContent = text;
+            message.className = `message ${type}`;
+            message.style.display = 'block';
+            setTimeout(() => {
+                hideMessage();
+            }, 5000);
+        }
+
+        function hideMessage() {
+            message.style.display = 'none';
+        }
+    </script>
 </body>
 </html>

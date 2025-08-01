@@ -72,6 +72,32 @@ python app.py
 
 ## 环境变量
 
+### 必需配置
+
+1. **复制环境变量模板**
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **获取 Hugging Face API Token**
+   - 访问：https://huggingface.co/settings/tokens
+   - 创建新的 Token（选择 Read 权限）
+   - 复制生成的 Token
+
+3. **编辑 .env 文件**
+   ```bash
+   # 编辑 .env 文件，填入您的实际 Token
+   HF_API_TOKEN=hf_your_actual_token_here
+   PORT=5001
+   FLASK_ENV=development
+   ```
+
+⚠️ **重要提醒**：
+- 如果遇到 "HF_API_TOKEN环境变量未设置" 错误，请查看 [Token设置指南](SETUP_TOKEN.md)
+- 请确保 .env 文件不要提交到 Git 仓库
+
+### 环境变量说明
+
 | 变量名 | 描述 | 必需 |
 |--------|------|------|
 | `HF_API_TOKEN` | Hugging Face API Token | 是 |
