@@ -131,3 +131,49 @@ git config --global credential.helper store
 - 添加了.env.example文件说明环境变量配置
 - 更新了.gitignore确保敏感文件不被提交
 - 所有脚本改为从环境变量读取敏感信息
+
+### 最终结果
+- ✅ 项目已成功清理所有敏感信息
+- ✅ 代码已安全推送到远程仓库
+- ✅ 应用可正常运行在 http://localhost:5001
+- ✅ 环境变量配置完善，支持Token管理
+- ✅ 项目文档完整，包含详细的使用说明
+
+## 2025-01-27 - 测试脚本重组
+
+### 问题描述
+- 用户要求将测试脚本移动到新建的test文件夹中
+- 需要确保文件路径变化后项目仍能正常运行
+- 需要梳理整个工程的文件引用关系
+
+### 解决方案
+1. **创建test目录**：新建专门的测试文件夹
+2. **移动测试脚本**：将所有test_*.py文件移动到test/目录
+3. **创建测试运行脚本**：在test/目录下创建run_tests.sh统一测试入口
+4. **清理残留文件**：删除根目录下的重复测试文件
+5. **更新项目文档**：在README.md中添加测试说明
+
+### 修改内容
+- 创建 `test/` 目录
+- 移动测试文件：
+  - `test_api_connection.py` → `test/test_api_connection.py`
+  - `test_hf_api.py` → `test/test_hf_api.py`
+  - `test_real_esrgan.py` → `test/test_real_esrgan.py`
+  - `test_stable_diffusion_upscaler.py` → `test/test_stable_diffusion_upscaler.py`
+- 新增 `test/run_tests.sh`：统一测试运行脚本
+- 更新 `README.md`：添加测试章节和使用说明
+- 更新 `action.md`：记录测试脚本重组过程
+
+### 测试脚本功能
+- `test/run_tests.sh`：
+  - 自动激活conda环境
+  - 加载环境变量配置
+  - 依次运行所有测试脚本
+  - 提供详细的测试结果反馈
+
+### 测试结果
+- ✅ 所有测试脚本成功移动到test/目录
+- ✅ 测试运行脚本创建完成并具有执行权限
+- ✅ 项目文档已更新，包含完整的测试说明
+- ✅ 工程结构更加清晰，测试代码与主代码分离
+- ✅ 应用主功能不受影响，仍可正常运行

@@ -84,6 +84,31 @@ python app.py
 - `GET /health` - 健康检查
 - `GET /info` - 应用信息
 
+## 测试
+
+项目包含完整的测试套件，位于 `test/` 目录下：
+
+### 运行所有测试
+```bash
+cd test
+./run_tests.sh
+```
+
+### 单独运行测试
+```bash
+cd test
+python3 test_api_connection.py    # 测试API连接
+python3 test_hf_api.py           # 测试Hugging Face API
+python3 test_real_esrgan.py      # 测试Real-ESRGAN模型
+python3 test_stable_diffusion_upscaler.py  # 测试Stable Diffusion放大器
+```
+
+### 测试说明
+- `test_api_connection.py`: 验证Hugging Face API连接和Token有效性
+- `test_hf_api.py`: 测试超分辨率模型的可用性
+- `test_real_esrgan.py`: 测试Real-ESRGAN模型的图像处理功能
+- `test_stable_diffusion_upscaler.py`: 测试Stable Diffusion放大器
+
 ## 故障排除
 
 ### 端口占用问题
@@ -97,6 +122,7 @@ python app.py
 1. 确保已设置 `HF_API_TOKEN` 环境变量
 2. 验证 Token 有效性: https://huggingface.co/settings/tokens
 3. 确保 Token 有足够的权限
+4. 运行测试验证配置: `cd test && ./run_tests.sh`
 
 ### 网络连接问题
 如果本地网络无法访问 Hugging Face API，建议部署到 Render 获得更稳定的网络环境。
