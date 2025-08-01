@@ -50,44 +50,54 @@ def validate_image(file_data):
     logger.info(f"图片验证通过: {img.format}, 尺寸: {width}x{height}")
     return True
 
-def upscale_image(image_data, max_retries=3):
-    """使用Hugging Face API进行超分辨率处理"""
-    assert HF_API_TOKEN, "HF_API_TOKEN环境变量未设置"
+def upscale_image(image_data, method='lanczos', scale_factor=2):
+    """使用本地PIL进行图像超分辨率处理"""
     assert image_data, "图片数据为空"
+    assert method in ['lanczos', 'bicubic'], "插值方法必须是lanczos或bicubic"
+    assert scale_factor in [2, 3, 4], "放大倍数必须是2、3或4"
     
-    headers = {
-        "Authorization": f"Bearer {HF_API_TOKEN}",
-        "Content-Type": "application/octet-stream",
-        "User-Agent": "AI-Upscaler/1.0"
-    }
-    
-    for attempt in range(max_retries):
-        start_time = time.time()
-        logger.info(f"开始第 {attempt + 1} 次API调用...")
+    try:
+        # 打开原始图片
+        img = Image.open(io.BytesIO(image_data))
+        original_size = img.size
+        logger.info(f"原始图片尺寸: {original_size}，使用{method}插值，{scale_factor}倍放大")
         
-        response = requests.post(
-            HF_API_URL,
-            headers=headers,
-            data=image_data,
-            timeout=120
-        )
+        # 根据选择的插值方法进行放大
+        new_size = (original_size[0] * scale_factor, original_size[1] * scale_factor)
         
-        elapsed_time = time.time() - start_time
-        logger.info(f"API调用完成，耗时: {elapsed_time:.2f}秒，状态码: {response.status_code}")
+        if method == 'bicubic':
+            upscaled_img = img.resize(new_size, Image.Resampling.BICUBIC)
+            logger.info("使用双立方插值进行图像放大")
+        else:  # lanczos
+            upscaled_img = img.resize(new_size, Image.Resampling.LANCZOS)
+            logger.info("使用Lanczos插值进行图像放大")
         
-        if response.status_code == 200:
-            assert response.content, "API返回空内容"
-            logger.info(f"超分处理成功，返回数据大小: {len(response.content)} bytes")
-            return response.content
-        elif response.status_code == 503 and attempt < max_retries - 1:
-            wait_time = 2 ** attempt
-            logger.warning(f"模型加载中，等待 {wait_time} 秒后重试...")
-            time.sleep(wait_time)
-            continue
+        # 应用图像增强
+        from PIL import ImageFilter, ImageEnhance
+        
+        # 轻微锐化
+        upscaled_img = upscaled_img.filter(ImageFilter.SHARPEN)
+        
+        # 增强对比度
+        enhancer = ImageEnhance.Contrast(upscaled_img)
+        upscaled_img = enhancer.enhance(1.05)
+        
+        # 转换为字节数据
+        output_buffer = io.BytesIO()
+        # 保持原始格式，如果是JPEG则使用高质量
+        if img.format == 'JPEG':
+            upscaled_img.save(output_buffer, format='JPEG', quality=95, optimize=True)
         else:
-            error_msg = f"API调用失败: {response.status_code} - {response.text}"
-            logger.error(error_msg)
-            assert False, error_msg
+            upscaled_img.save(output_buffer, format='PNG', optimize=True)
+        
+        result_data = output_buffer.getvalue()
+        logger.info(f"超分处理成功，新尺寸: {new_size}，输出大小: {len(result_data)} bytes")
+        return result_data
+        
+    except Exception as e:
+        error_msg = f"本地图像处理失败: {str(e)}"
+        logger.error(error_msg)
+        assert False, error_msg
 
 @app.route('/')
 def index():
@@ -104,6 +114,12 @@ def upscale():
     assert file.filename, "未选择图片"
     assert allowed_file(file.filename), f"不支持的文件类型，仅支持: {', '.join(ALLOWED_EXTENSIONS)}"
     
+    # 获取插值方法和放大倍数参数
+    method = request.form.get('method', 'lanczos').lower()
+    scale_factor = int(request.form.get('scale_factor', 2))
+    
+    logger.info(f"使用插值方法: {method}, 放大倍数: {scale_factor}")
+    
     # 验证文件大小
     file.seek(0, os.SEEK_END)
     file_size = file.tell()
@@ -118,8 +134,8 @@ def upscale():
     image_data = file.read()
     validate_image(image_data)
     
-    # 调用AI超分
-    result = upscale_image(image_data)
+    # 调用本地超分处理，传入插值方法和放大倍数
+    result = upscale_image(image_data, method=method, scale_factor=scale_factor)
     
     # 转换为base64返回给前端
     encoded_image = base64.b64encode(result).decode('utf-8')
@@ -132,7 +148,9 @@ def upscale():
         'image': f'data:image/png;base64,{encoded_image}',
         'processing_time': round(total_time, 2),
         'original_size': file_size,
-        'result_size': len(result)
+        'result_size': len(result),
+        'method': method,
+        'scale_factor': scale_factor
     })
 
 @app.errorhandler(AssertionError)
@@ -163,9 +181,17 @@ def info():
     return jsonify({
         'name': 'AI图像超分辨率应用',
         'version': '1.0.0',
-        'model': 'stabilityai/stable-diffusion-x4-upscaler',
+        'processing_method': 'PIL本地处理',
+        'supported_interpolation': ['lanczos', 'bicubic'],
+        'supported_scale_factors': [2, 3, 4],
         'max_file_size_mb': MAX_FILE_SIZE // (1024 * 1024),
-        'supported_formats': list(ALLOWED_EXTENSIONS)
+        'supported_formats': list(ALLOWED_EXTENSIONS),
+        'features': {
+            'lanczos_interpolation': '高质量Lanczos插值算法',
+            'bicubic_interpolation': '双立方插值算法',
+            'image_enhancement': '自动锐化和对比度增强',
+            'multiple_scale_factors': '支持2倍、3倍、4倍放大'
+        }
     })
 
 if __name__ == '__main__':
